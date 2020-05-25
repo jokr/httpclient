@@ -2,6 +2,7 @@ use std::io::Write;
 use httpclient::request;
 
 fn main() {
+    env_logger::init();
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() != 2 {
