@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
@@ -7,9 +8,9 @@ use std::net::ToSocketAddrs;
 
 #[derive(Debug)]
 pub struct Response {
-    status: u16,
-    headers: Vec<(String, String)>,
-    body: Option<String>,
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<Vec<u8>>,
 }
 
 pub fn request(url: &str) -> Result<Response, std::io::Error> {
@@ -49,6 +50,7 @@ pub fn request(url: &str) -> Result<Response, std::io::Error> {
     buf.clear();
 
     let mut headers = Vec::new();
+    let mut content_length = None;
     while reader.read_line(&mut buf)? > 0 {
         print!("{}", buf);
         let idx = buf.find(":");
@@ -56,11 +58,29 @@ pub fn request(url: &str) -> Result<Response, std::io::Error> {
             break;
         }
         let idx_val = idx.unwrap();
-        headers.push((buf[..idx_val].to_string(), buf[idx_val + 1..].to_string()));
+        let header = (buf[..idx_val].to_string(), buf[idx_val + 1..].to_string());
+        if header.0 == "Content-Length" {
+            content_length = Some(header.1.trim().parse::<usize>().unwrap());
+        }
+        headers.push(header);
         buf.clear();
     }
 
-    Ok(Response { status, headers, body: None})
+    match content_length {
+        Some(0) => {
+            return Ok(Response { status, headers, body: None});
+        },
+        Some(content_length) => {
+            let mut body = vec![0; content_length];
+            reader.read_exact(&mut body)?;
+            return Ok(Response { status, headers, body: Some(body)});
+        },
+        None => {
+            let mut body = Vec::new();
+            reader.read_to_end(&mut body)?;
+            return Ok(Response { status, headers, body: Some(body)});
+        },
+    };
 }
 
 #[derive(Debug)]

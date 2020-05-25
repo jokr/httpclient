@@ -16,5 +16,7 @@ fn main() {
     }
     let response = request(&args[1])
         .unwrap();
-    println!("{:?}", response);
+    println!("Status: {:?}", response.status);
+    println!("Headers: {:?}", response.headers);
+    println!("Body: {:?}", String::from_utf8_lossy(&response.body.unwrap_or(vec![])));
 }
