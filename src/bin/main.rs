@@ -1,5 +1,5 @@
-use std::io::Write;
 use httpclient::request;
+use std::io::Write;
 
 fn main() {
     env_logger::init();
@@ -15,9 +15,5 @@ fn main() {
         .unwrap();
         std::process::exit(1);
     }
-    let response = request(&args[1])
-        .unwrap();
-    println!("Status: {:?}", response.status);
-    println!("Headers: {:?}", response.headers);
-    println!("Body: {:?}", String::from_utf8_lossy(&response.body.unwrap_or(vec![])));
+    request(&args[1]).unwrap();
 }

@@ -38,7 +38,7 @@ pub fn request(url: &str) -> Result<Response> {
         .collect();
 
     let mut stream = TcpStream::connect(&addrs[..]).expect("Could not connect to server.");
-    info!("Connected to {:?}\n", stream.peer_addr().unwrap());
+    info!("Connected to {:?}", stream.peer_addr().unwrap());
 
     write!(
         stream,
@@ -55,7 +55,7 @@ pub fn request(url: &str) -> Result<Response> {
     let mut reader = BufReader::new(stream);
     let mut buf = String::new();
     reader.read_line(&mut buf)?;
-    debug!("{}", buf);
+    debug!("{}", &buf[..buf.len() - 2]);
     let status = buf
         .split(' ')
         .nth(1)
@@ -68,11 +68,11 @@ pub fn request(url: &str) -> Result<Response> {
     let mut headers = Vec::new();
     let mut content_length = None;
     while reader.read_line(&mut buf)? > 0 {
-        debug!("{}", buf);
         let idx = buf.find(":");
         if idx.is_none() {
             break;
         }
+        debug!("{}", &buf[..buf.len() - 2]);
         let idx_val = idx.unwrap();
         let header = (
             buf[..idx_val].to_lowercase(),
@@ -85,22 +85,38 @@ pub fn request(url: &str) -> Result<Response> {
         buf.clear();
     }
 
+    info!("Read {} headers.", headers.len());
+
+    let body = match content_length {
+        Some(0) => None,
+        Some(content_length) => {
+            let mut body = vec![0; content_length];
+            reader.read_exact(&mut body)?;
+            Some(body)
+        }
+        None => {
+            reader.read_line(&mut buf)?;
+            let mut chunk_size = usize::from_str_radix(&buf.trim(), 16)?;
+            buf.clear();
+
+            let mut body = vec![0; chunk_size];
+            while chunk_size > 0 {
+                reader.read_exact(&mut body)?;
+                reader.read_line(&mut buf)?; // reads the trailing CRLF
+                reader.read_line(&mut buf)?; // reads the next chunk size line
+                chunk_size = usize::from_str_radix(&buf.trim(), 16)?;
+                buf.clear();
+                body.reserve_exact(chunk_size);
+            }
+            Some(body)
+        }
+    };
+    info!("Read {} bytes.", body.as_ref().map_or(0, |s| { s.len() }));
+
     Ok(Response {
         status,
         headers,
-        body: match content_length {
-            Some(0) => None,
-            Some(content_length) => {
-                let mut body = vec![0; content_length];
-                reader.read_exact(&mut body)?;
-                Some(body)
-            }
-            None => {
-                let mut body = Vec::new();
-                reader.read_to_end(&mut body)?;
-                Some(body)
-            }
-        },
+        body,
     })
 }
 
